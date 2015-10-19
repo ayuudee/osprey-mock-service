@@ -1,5 +1,6 @@
-var router = require('osprey-router')
 var Negotiator = require('negotiator')
+var resources = require('osprey-resources')
+var osprey = require('osprey')
 
 /**
  * Export the mock server.
@@ -16,11 +17,7 @@ module.exports.loadFile = loadFile
  * @return {Function}
  */
 function ospreyMockServer (raml) {
-  var app = router()
-
-  app.use(createResources(raml.resources))
-
-  return app
+  return resources(raml.resources, handler)
 }
 
 /**
@@ -31,10 +28,9 @@ function ospreyMockServer (raml) {
  * @return {Function}
  */
 function createServer (raml, options) {
-  var app = router()
-  var osprey = require('osprey')
+  var app = osprey.Router()
 
-  app.use(osprey.createServer(raml, options))
+  app.use(osprey.server(raml, options))
   app.use(ospreyMockServer(raml))
 
   return app
@@ -48,10 +44,10 @@ function createServer (raml, options) {
  * @return {Function}
  */
 function createServerFromBaseUri (raml, options) {
-  var app = router()
+  var app = osprey.Router()
   var path = (raml.baseUri || '').replace(/^(\w+:)?\/\/[^\/]+/, '') || '/'
 
-  app.use(path, createServer(raml, options))
+  app.use(path, raml.baseUriParameters, createServer(raml, options))
 
   return app
 }
@@ -69,49 +65,6 @@ function loadFile (filename, options) {
     .then(function (raml) {
       return createServerFromBaseUri(raml, options)
     })
-}
-
-/**
- * Create handlers for RAML resources.
- *
- * @param  {Object}   resources
- * @return {Function}
- */
-function createResources (resources) {
-  var app = router()
-
-  resources.forEach(function (resource) {
-    var path = resource.relativeUri
-    var params = resource.uriParameters
-
-    app.use(path, params, createResource(resource))
-  })
-
-  return app
-}
-
-/**
- * Create response handlers for a RAML resource.
- *
- * @param  {Object}   resource
- * @return {Function}
- */
-function createResource (resource) {
-  var app = router()
-  var methods = resource.methods
-  var resources = resource.resources
-
-  if (methods) {
-    methods.forEach(function (method) {
-      app[method.method]('/', handler(method))
-    })
-  }
-
-  if (resources) {
-    app.use(createResources(resources))
-  }
-
-  return app
 }
 
 /**
